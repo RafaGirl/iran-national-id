@@ -1,5 +1,7 @@
 [English](README.md) • [فارسی](README.fa.md)
 
+> <img src="icon.png" alt="Iran National ID icon" width="128" height="128">
+
 # iran-national-id (فارسی)
 
 اعتبارسنجی و تفسیر «کد ملی ایران» و نگاشت سه رقم اول به **استان/شهر صدور** با استفاده از یک دیتاست JSON.

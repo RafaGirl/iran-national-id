@@ -1,5 +1,7 @@
 [English](README.md) • [فارسی](README.fa.md)
 
+> <img src="icon.png" alt="Iran National ID icon" width="128" height="128">
+
 # iran-national-id
 
 Validate and decode Iranian national ID numbers (کد ملی) and map the first 3 digits to the **issuance province/city** using a JSON dataset.
