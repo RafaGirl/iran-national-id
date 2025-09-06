@@ -1,0 +1,99 @@
+# SPDX-License-Identifier: MIT
+from __future__ import annotations
+
+import json
+from importlib import resources
+from typing import Any, Dict, Iterable, List, Optional
+
+
+def _load_default_json() -> List[Dict[str, Any]]:
+    with resources.files("iran_national_id.data").joinpath("iran_codes.json").open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def load_codes(mapping: Optional[Iterable[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    """
+    Load and index the province/city mapping.
+
+    Args:
+        mapping: Optional iterable of province dicts with schema identical to data/iran_codes.json.
+                 If None, the embedded JSON is loaded.
+
+    Returns:
+        A dict with two keys:
+          - 'provinces': the original list of provinces (as loaded)
+          - 'index': a dict mapping each 3-digit code string -> {'province_fa': str, 'city_fa': str}
+    """
+    provinces: List[Dict[str, Any]] = list(mapping) if mapping is not None else _load_default_json()
+
+    index: Dict[str, Dict[str, str]] = {}
+    for p in provinces:
+        prov = p.get("province")
+        for city in p.get("cities", []):
+            c_name = city.get("city")
+            for code in city.get("codes", []):
+                index[str(code).zfill(3)] = {"province_fa": prov, "city_fa": c_name}
+
+    return {"provinces": provinces, "index": index}
+
+
+def describe(code: str, *, codes: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """
+    Describe a national ID: validity, check digit math, and issuance location (fa).
+
+    Args:
+        code: 10-digit national ID string.
+        codes: Optional result of load_codes(). If omitted, the embedded JSON is used.
+
+    Returns:
+        dict with keys:
+            - 'input': original code
+            - 'normalized': normalized code (same as input; leading zeros are preserved)
+            - 'is_valid': boolean
+            - 'math': {'sum': int, 'mod': int, 'check_digit': int, 'expected_digit': int}
+            - 'first3': 3-digit prefix
+            - 'issuance': {'province_fa': str|None, 'city_fa': str|None}
+    """
+    from .validator import compute_check_digit, is_valid
+
+    if not isinstance(code, str):
+        raise TypeError("code must be a string")
+    if len(code) != 10 or not code.isdigit():
+        # Still compute math from the leftmost 9 digits if possible (pad/truncate safely)
+        nine = (code + "0" * 9)[:9] if code else "000000000"
+    else:
+        nine = code[:9]
+
+    # math details
+    weights = list(range(10, 1, -1))  # 10..2
+    terms = [int(nine[i]) * weights[i] for i in range(9)]
+    s = sum(terms)
+    r = s % 11
+    expected = r if r < 2 else 11 - r
+    last = int(code[9]) if len(code) == 10 and code.isdigit() else None
+
+    # load codes index
+    if codes is None:
+        codes = load_codes()
+    idx = codes["index"]
+    first3 = (code[:3] if len(code) >= 3 else "").zfill(3)
+    place = idx.get(first3, {"province_fa": None, "city_fa": None})
+
+    return {
+        "input": code,
+        "normalized": code,
+        "is_valid": is_valid(code),
+        "math": {
+            "weights": weights,
+            "terms": terms,
+            "sum": s,
+            "mod": r,
+            "expected_digit": expected,
+            "last_digit": last,
+        },
+        "first3": first3,
+        "issuance": {
+            "province_fa": place.get("province_fa"),
+            "city_fa": place.get("city_fa"),
+        },
+    }
